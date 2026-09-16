@@ -1,0 +1,36 @@
+{
+  "name": "@mylive/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "선택점쟁이 웹 클라이언트 (React + TypeScript + Vite)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "corgi:crop": "node scripts/crop-corgi.mjs"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@mylive/shared": "0.1.0",
+    "framer-motion": "^13.3.0",
+    "lucide-react": "^1.46.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-hook-form": "^7.88.0",
+    "react-router-dom": "^7.18.4",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "sharp": "^0.35.4",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.3.0"
+  }
+}

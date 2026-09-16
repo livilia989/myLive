@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream: #fff9f0;
+  --lavender: #e9dfff;
+  --purple: #6d4bc3;
+  --purple-deep: #56379f;
+  --corgi: #f5c7a9;
+  --gold: #f3c969;
+  --text: #40384f;
+  --muted: #8b819b;
+  /* 작은 글씨용 보조 텍스트 (크림 배경 대비 4.5:1 이상) */
+  --muted-strong: #6b6180;
+  --user-message: #e8ddfb;
+  --assistant-message: #ffffff;
+
+  /* Tailwind 투명도 수식어(bg-purple/40 등)용 RGB 채널 */
+  --cream-rgb: 255 249 240;
+  --lavender-rgb: 233 223 255;
+  --purple-rgb: 109 75 195;
+  --purple-deep-rgb: 86 55 159;
+  --corgi-rgb: 245 199 169;
+  --gold-rgb: 243 201 105;
+  --text-rgb: 64 56 79;
+  --muted-rgb: 139 129 155;
+  --muted-strong-rgb: 107 97 128;
+  --user-message-rgb: 232 221 251;
+  --assistant-message-rgb: 255 255 255;
+
+  color-scheme: light;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-cream font-sans text-ink antialiased;
+    overflow-x: hidden;
+    word-break: keep-all;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 키보드 사용자를 위한 선명한 포커스 표시 */
+  :focus-visible {
+    outline: 3px solid var(--purple);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl border border-lavender/70 bg-white shadow-card;
+  }
+
+  .sr-only-focusable:not(:focus) {
+    @apply sr-only;
+  }
+}
+
+/* ───────────── 코기 캐릭터 애니메이션 ───────────── */
+
+@keyframes corgi-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes corgi-sway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes corgi-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.03); filter: brightness(1.08); }
+}
+
+@keyframes corgi-happy {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.08); }
+  100% { transform: scale(1.04); }
+}
+
+@keyframes corgi-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.corgi-anim-idle { animation: corgi-bob 3.2s ease-in-out infinite; }
+.corgi-anim-listening { animation: corgi-sway 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
+.corgi-anim-thinking { animation: corgi-pulse 1.6s ease-in-out infinite; }
+.corgi-anim-analysis { animation: corgi-pulse 1.1s ease-in-out infinite; }
+.corgi-anim-happy { animation: corgi-happy 0.6s ease-out forwards; }
+.corgi-anim-error, .corgi-anim-surprised { animation: corgi-shake 0.5s ease-in-out 1; }
+.corgi-anim-sleeping { animation: corgi-bob 4.5s ease-in-out infinite; }
+
+.twinkle { animation: twinkle 1.8s ease-in-out infinite; }
+.typing-dot { animation: typing-dot 1.2s ease-in-out infinite; }
+
+/* 움직임 줄이기: OS 설정 또는 앱 설정 */
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-allowed) *,
+  html:not(.motion-allowed) *::before,
+  html:not(.motion-allowed) *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

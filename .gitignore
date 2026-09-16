@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# build
+dist/
+build/
+coverage/
+
+# env (API 키 등 비밀 값은 절대 커밋하지 않는다)
+.env
+.env.local
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# misc
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 로컬 도구 설정
+.claude/
+
+# 캐릭터 원본은 시트만 보관 (잘못 잘린 개별 이미지는 제외, 상태별 이미지는 frontend/src/assets/corgi 에 있음)
+corgi-assets/*
+!corgi-assets/corgi-character-sheet.png

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="보라색 점쟁이 모자를 쓴 웰시코기">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#8E6FE0"/>
+      <stop offset="100%" stop-color="#5A3AAE"/>
+    </radialGradient>
+  </defs>
+  <circle cx="100" cy="100" r="100" fill="url(#bg)"/>
+  <g fill="#F3C969">
+    <path d="M30 60l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/>
+    <path d="M168 110l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>
+  </g>
+  <!-- cape -->
+  <path d="M40 200c4-40 30-58 60-58s56 18 60 58z" fill="#6D4BC3"/>
+  <circle cx="100" cy="150" r="7" fill="#F3C969"/>
+  <!-- ears -->
+  <path d="M52 88L44 38l40 30z" fill="#E9A36E"/>
+  <path d="M148 88l8-50-40 30z" fill="#E9A36E"/>
+  <path d="M56 80l-5-30 22 20z" fill="#F7C6C9"/>
+  <path d="M144 80l5-30-22 20z" fill="#F7C6C9"/>
+  <!-- head -->
+  <ellipse cx="100" cy="104" rx="52" ry="46" fill="#F0B27A"/>
+  <path d="M100 66c-8 0-12 14-12 26 0 10-26 16-26 34 0 14 18 22 38 22s38-8 38-22c0-18-26-24-26-34 0-12-4-26-12-26z" fill="#FFF6EC"/>
+  <!-- face -->
+  <ellipse cx="80" cy="104" rx="7" ry="8" fill="#3A2A2A"/>
+  <ellipse cx="120" cy="104" rx="7" ry="8" fill="#3A2A2A"/>
+  <circle cx="82" cy="101" r="2.4" fill="#fff"/>
+  <circle cx="122" cy="101" r="2.4" fill="#fff"/>
+  <ellipse cx="67" cy="118" rx="7" ry="4" fill="#F7A8B0" opacity=".7"/>
+  <ellipse cx="133" cy="118" rx="7" ry="4" fill="#F7A8B0" opacity=".7"/>
+  <ellipse cx="100" cy="118" rx="6" ry="4.5" fill="#3A2A2A"/>
+  <path d="M91 125q9 8 18 0" stroke="#3A2A2A" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <path d="M96 128q4 9 8 0z" fill="#F28B9A"/>
+  <!-- hat -->
+  <path d="M46 70q54-22 108 0l-6 8q-48-16-96 0z" fill="#5A3AAE"/>
+  <path d="M62 66q10-50 58-58-10 14-6 26 8 22 26 30-40-12-78 2z" fill="#6D4BC3"/>
+  <path d="M112 34a9 9 0 1 0 6 12 7 7 0 1 1-6-12z" fill="#F3C969"/>
+  <path d="M84 50l2 4 4 2-4 2-2 4-2-4-4-2 4-2z" fill="#F3C969"/>
+</svg>
