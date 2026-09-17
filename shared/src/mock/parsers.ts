@@ -34,14 +34,19 @@ const DECISION_TAIL =
 // 긴 사연형 입력: 문장 분리 → "고민 문장" 과 "상황 설명" 구분
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * 문장 분리.
+ * - 마침표 · 물음표 · 느낌표 뒤에 공백/끝이 올 때만 자른다 → "1.5만원", "화~금", "화-목" 은 자르지 않는다.
+ * - 오타로 물음표 대신 ">" 를 친 경우도 문장 끝으로 본다.
+ */
 export function splitSentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?。…>~])\s*|\n+/)
-    .map((s) => s.replace(/[.!?。…>~]+$/g, "").trim())
+    .split(/(?<=[.!?。…？！]|[가-힣]>)(?=\s|$)|\n+/)
+    .map((s) => s.replace(/[.!?。…？！>]+$/g, "").trim())
     .filter(Boolean);
 }
 
-const QUESTION_ENDING = /(?:까|지|나|래|요|어때|좋아|말아|고민|할지|될지|갈지)\s*$/;
+const QUESTION_ENDING = /(?:까|지|나|래|요|어때|좋아|말아|고민|할지|될지|갈지|어떡해|몰라|모르겠어)\s*$/;
 
 /** 여러 문장 중 실제로 고민을 묻는 문장 (보통 마지막 질문형 문장) */
 export function pickDecisionSentence(text: string): string {
@@ -49,13 +54,69 @@ export function pickDecisionSentence(text: string): string {
   return [...sentences].reverse().find((s) => QUESTION_ENDING.test(s)) ?? sentences.at(-1) ?? text.trim();
 }
 
-/** 고민 문장을 뺀 나머지 문장 = 상황 설명 (최대 3개) */
+/** 고민 문장을 뺀 나머지 문장 = 상황 설명 (최대 5개) */
 export function extractSituation(text: string): string[] {
   const decision = pickDecisionSentence(text);
   return splitSentences(text)
     .filter((s) => s !== decision && s.length >= 4)
-    .slice(0, 3)
-    .map((s) => (s.length > 60 ? `${s.slice(0, 58)}…` : s));
+    .map((s) => s.replace(/^(?:아마|근데|그리고|그래서)\s+/, ""))
+    .slice(0, 5)
+    .map((s) => (s.length > 70 ? `${s.slice(0, 68)}…` : s));
+}
+
+/** "어떻게 하는 게 좋을까?", "어떡하지", "뭐가 나을까" 처럼 선택지를 말하지 않은 열린 질문 */
+export function isOpenQuestion(text: string): boolean {
+  return /어떻게\s*(?:하는\s*게|하는게|하는\s*것이|해야|할까|하지|하면|대처|말해|해\??$)|어떡하지|어떡해|어쩌지|어쩌면\s*좋|뭐가\s*(?:좋|나을|낫|맞)|어떤\s*게\s*(?:좋|나을|낫|맞)|어떻게\s*생각|조언|방법이\s*있/.test(
+    normalize(pickDecisionSentence(text)),
+  );
+}
+
+/** "쉴" → "쉬기", "만날" → "만나기", "먹을" → "먹기", "할" → "하기" */
+function toGerund(phrase: string): string | undefined {
+  const words = phrase.trim().split(/\s+/);
+  const last = words.pop() ?? "";
+  let stem: string | undefined;
+  if (/.을$/.test(last)) stem = last.slice(0, -1);
+  else {
+    const code = last.charCodeAt(last.length - 1);
+    const isHangul = code >= 0xac00 && code <= 0xd7a3;
+    if (isHangul && (code - 0xac00) % 28 === 8) stem = last.slice(0, -1) + String.fromCharCode(code - 8);
+  }
+  if (!stem) return undefined;
+  return [...words, `${stem}기`].join(" ");
+}
+
+/** "집에서 쉴지 친구 만날지 고민이야" → ["집에서 쉬기", "친구 만나기"] */
+export function extractAlternativeVerbChoices(text: string): string[] | undefined {
+  const sentence = normalize(pickDecisionSentence(text)).replace(/^(?:그냥|차라리|이번\s*\S+에?|오늘|내일|주말에?)\s+/, "");
+  const m = sentence.match(/(\S+(?:\s\S+)?)지\s+(\S+(?:\s\S+)?)지(?:\s|$)/);
+  if (!m || /말$/.test(m[2])) return undefined;
+  const first = toGerund(m[1].replace(/^(?:주말에|오늘|내일)\s+/, ""));
+  const second = toGerund(m[2]);
+  return first && second ? [first, second] : undefined;
+}
+
+/**
+ * "친구가 나에게 X를 해달라고 했어", "X 하자고 했어" 같은 요청이 있고 열린 질문이면
+ * ["X 해주기", "X 하지 않기"] 로 바꾼다.
+ */
+export function extractRequestChoices(text: string): string[] | undefined {
+  const t = normalize(text);
+  // "노트북을 빌려달라고", "더치페이를 해달라고", "돈 좀 빌려줬으면"
+  const give = t.match(/([가-힣a-z0-9]+?)(?:을|를)?\s+(?:좀\s+)?([가-힣]+?)\s*(?:달라고|주라고|줬으면|달래|달라는)/);
+  if (give) {
+    const target = give[1];
+    const verb = give[2];
+    if (target.length >= 2 && !isStopword(target)) return [`${target} ${verb}주기`, `${target} ${verb}주지 않기`];
+  }
+  // "여행 가자고", "이직하라고"
+  const suggest = t.match(/([가-힣a-z0-9]+?)(?:을|를)?\s*(?:하자고|하라고|하자는|가자고|가자는)/);
+  if (suggest) {
+    const target = suggest[1];
+    const verb = /가자/.test(suggest[0]) ? "가기" : "하기";
+    if (target.length >= 2 && !isStopword(target)) return [`${target} ${verb}`, `${target} ${verb.replace("기", "지 않기")}`];
+  }
+  return undefined;
 }
 
 const FILLER = /^(?:그냥|차라리|역시|혹시|이번엔|이번에는|아예|그럼|그러면|근데|그래도|솔직히|그래서)\s+/;
@@ -67,7 +128,7 @@ function cleanStem(raw: string): string | undefined {
   return stem;
 }
 
-const SPLIT_BILL = /더치\s*페이|나눠\s*(?:내|계산)|반반|엔빵|n\s*빵|각자\s*(?:계산|내|부담)/i;
+export const SPLIT_BILL = /더치\s*페이|나눠\s*(?:내|계산)|반반|엔빵|n\s*빵|각자\s*(?:계산|내|부담)/i;
 
 /**
  * "~하는 게 맞을까?", "~해도 될까?", "~해야 할까?", "~할까 말까" 같은 예/아니오 고민을
@@ -92,7 +153,8 @@ export function extractYesNoChoices(text: string): string[] | undefined {
       if (stem) break;
     }
   }
-  if (!stem || stem === "하") return undefined;
+  // "어떻게 하는 게 좋을까" 는 예/아니오가 아니라 열린 질문이다
+  if (!stem || stem === "하" || /^(?:어떻게|어떡|뭘|뭐|무엇을|어디|언제|누구)/.test(stem)) return undefined;
 
   const yes = `${stem}기`;
   const no = SPLIT_BILL.test(text) && /(?:사|내|쏘|결제하|계산하)$/.test(stem) ? "더치페이 하기" : `${stem}지 않기`;

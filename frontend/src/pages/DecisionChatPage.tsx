@@ -74,7 +74,8 @@ const DecisionChatPage = () => {
         }
         footer={
           <>
-            {currentSession.result && !isTyping && (
+            {/* 결과를 보여주는 단계일 때만 표시 (선택지를 수정하거나 새 이야기를 하는 중에는 숨김) */}
+            {currentSession.result && !isTyping && (stage === "presenting_result" || stage === "completed") && (
               <div className="flex items-center justify-between gap-2 border-t border-gold/50 bg-gold/15 px-4 py-2">
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
                   <Sparkles aria-hidden size={16} className="text-purple" /> 결과가 준비됐어요

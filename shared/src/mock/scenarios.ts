@@ -7,6 +7,7 @@ import {
   normalize,
   parseAmountManwon,
   parseNights,
+  pickDecisionSentence,
   weightByOrder,
 } from "./parsers";
 
@@ -32,7 +33,7 @@ export interface ScenarioQuestion {
 }
 
 export interface ScenarioDefinition {
-  key: "travel" | "food" | "phone" | "buy" | "generic";
+  key: "travel" | "food" | "phone" | "buy" | "splitBill" | "generic";
   category: DecisionCategory;
   emoji: string;
   topic: (state: ScenarioState) => string;
@@ -699,11 +700,190 @@ const generic: ScenarioDefinition = {
   transition: ({ choices }) => `좋아, 필요한 건 다 들었어!\n${choices.length === 2 ? "두 선택지를" : "선택지들을"} 차근차근 비교해볼게! 🔮`,
 };
 
+// ─────────────────────────────────────────────────────────────
+// 계산 · 더치페이 (사람 사이의 돈 고민)
+// 사연에서 사실(누가 냈는지, 금액이 비슷한지, 큰 지출이 있는지, 상대가 무엇을 원했는지)을 뽑아
+// 질문을 줄이고 점수에 반영한다.
+// ─────────────────────────────────────────────────────────────
+
+export const SPLIT_BILL_CHOICES = {
+  dutch: "더치페이 하기",
+  alternate: "번갈아 사기",
+  hybrid: "큰 금액만 더치페이",
+  iPay: "내가 사기",
+} as const;
+
+const SPLIT_BILL_PATTERN = /더치\s*페이|나눠\s*(?:내|계산)|반반|엔빵|n\s*빵|각자\s*(?:계산|내|부담)/i;
+const PAYMENT_TOPIC = /(?:산다|샀|사줬|사줄|쏘|낸다|냈|결제|계산|밥값|술값|커피값)/;
+
+export interface SplitBillFacts {
+  otherAsksDutch: boolean;
+  otherPaid: boolean;
+  iPaid: boolean;
+  amountsSimilar: boolean;
+  bigExpense: boolean;
+  partner: string;
+}
+
+export function extractSplitBillFacts(text: string): SplitBillFacts | undefined {
+  const t = normalize(text);
+  if (!SPLIT_BILL_PATTERN.test(t) && !(PAYMENT_TOPIC.test(t) && RELATIONSHIP_PATTERN.test(t))) return undefined;
+  const partner = t.match(RELATIONSHIP_PATTERN)?.[0] ?? "상대";
+  return {
+    otherAsksDutch: /(?:더치\s*페이|반반|나눠\s*내|각자)[^.?!]{0,12}(?:해\s*달|하자|했으면|하면\s*좋겠|원해|원한|얘기|이야기|말)/.test(t),
+    otherPaid: new RegExp(`${partner}(?:가|이)?\\s*(?:\\S+\\s*){0,2}(?:산다|샀|사줬|냈|결제|계산)`).test(t),
+    iPaid: /(?:내가|제가)\s*(?:\S+\s*){0,2}(?:산다|샀|사줬|냈|결제|계산)/.test(t),
+    amountsSimilar: /비슷|거의\s*같|똑같|차이\s*(?:없|안)/.test(t),
+    bigExpense: /오마카세|코스\s*요리|호텔|고급|비싼|\d{2,}\s*만\s*원|\d{5,}\s*원|\d+\s*만원/.test(t),
+    partner,
+  };
+}
+
+function factsFromPrefs(prefs: Prefs): SplitBillFacts {
+  return {
+    otherAsksDutch: prefs.otherAsksDutch === true,
+    otherPaid: prefs.otherPaid === true,
+    iPaid: prefs.iPaid === true,
+    amountsSimilar: prefs.amountsSimilar === true,
+    bigExpense: prefs.bigExpense === true,
+    partner: String(prefs.partner ?? "상대"),
+  };
+}
+
+export function splitBillChoices(text: string, facts: SplitBillFacts): string[] {
+  const asksAboutPayingMyself = /(?:내가|제가)\s*(?:그냥\s*)?(?:사는|살까|사야|내는|낼까|계산하는|쏘는)/.test(normalize(pickDecisionSentence(text)));
+  if (asksAboutPayingMyself) return [SPLIT_BILL_CHOICES.iPay, SPLIT_BILL_CHOICES.dutch];
+  const choices: string[] = [SPLIT_BILL_CHOICES.dutch, SPLIT_BILL_CHOICES.alternate];
+  if (facts.bigExpense) choices.push(SPLIT_BILL_CHOICES.hybrid);
+  return choices;
+}
+
+/** [선택지] → [기준] → 점수 (1~5) */
+function splitBillScore(choice: string, criterion: string, prefs: Prefs): number | undefined {
+  const f = factsFromPrefs(prefs);
+  const feeling = String(prefs.feeling ?? "ok");
+  const C = SPLIT_BILL_CHOICES;
+  const table: Record<string, Record<string, number>> = {
+    공정함: {
+      [C.dutch]: 5,
+      [C.alternate]: f.amountsSimilar ? 4 : 2,
+      [C.hybrid]: f.amountsSimilar ? 5 : 4,
+      [C.iPay]: f.otherPaid ? 3 : 1,
+    },
+    관계: {
+      [C.dutch]: f.otherAsksDutch ? (feeling === "hurt" ? 3 : 4) : 3,
+      [C.alternate]: f.otherAsksDutch ? 3 : 4,
+      [C.hybrid]: 4,
+      [C.iPay]: f.otherAsksDutch ? 2 : 4,
+    },
+    "금전 부담": {
+      [C.dutch]: 4,
+      [C.alternate]: f.bigExpense ? 2 : 3,
+      [C.hybrid]: f.bigExpense ? 5 : 4,
+      [C.iPay]: 1,
+    },
+    "마음 편함": {
+      [C.dutch]: feeling === "relieved" ? 5 : feeling === "hurt" ? 2 : 4,
+      [C.alternate]: feeling === "hurt" ? 4 : feeling === "relieved" ? 2 : 3,
+      [C.hybrid]: feeling === "hurt" ? 3 : 4,
+      [C.iPay]: feeling === "hurt" ? 3 : 2,
+    },
+    "상대방 입장": {
+      [C.dutch]: f.otherAsksDutch ? 5 : 3,
+      [C.alternate]: f.otherAsksDutch ? 2 : 3,
+      [C.hybrid]: f.otherAsksDutch ? 3 : 3,
+      [C.iPay]: f.otherAsksDutch ? 1 : 3,
+    },
+  };
+  return table[criterion]?.[choice];
+}
+
+const splitBill: ScenarioDefinition = {
+  key: "splitBill",
+  category: "daily",
+  emoji: "💸",
+  topic: ({ prefs }) => `${josa(String(prefs.partner ?? "상대"), "과/와")} 계산 방법`,
+  intro: ({ prefs, choices }) => {
+    const f = factsFromPrefs(prefs);
+    const noticed: string[] = [];
+    const history =
+      f.otherPaid && f.iPaid
+        ? "지금까지는 서로 번갈아 계산했"
+        : f.otherPaid
+          ? `${josa(f.partner, "이/가")} 먼저 한 번 샀`
+          : f.iPaid
+            ? "네가 한 번 계산했"
+            : "";
+    if (history) noticed.push(f.amountsSimilar ? `${history}고, 금액도 비슷한 편이야.` : `${history}어.`);
+    else if (f.amountsSimilar) noticed.push("금액은 비슷한 편이야.");
+    if (f.otherAsksDutch) noticed.push(`그런데 ${josa(f.partner, "은/는")} 더치페이를 원하고 있구나.`);
+    if (f.bigExpense) noticed.push("금액이 큰 날도 있어서 더 신경 쓰이겠다.");
+    const insight = noticed.length ? `내가 이해한 건 이거야: ${noticed.join(" ")}\n\n` : "";
+    return `이야기해줘서 고마워. 🐾\n${situationBullets(prefs)}${insight}생각해볼 수 있는 방법은 이런 것들이야:\n${choices
+      .map((c) => `• ${c}`)
+      .join("\n")}`;
+  },
+  questions: () => [
+    {
+      id: "criteria",
+      text: () => "이 고민에서 가장 중요한 게 뭐야? 중요한 순서대로 여러 개 골라도 좋아.",
+      options: () => CATEGORY_CRITERIA_OPTIONS.relationship,
+      parse: (answer, state) => {
+        let names = extractKeywords(answer, GENERIC_CRITERIA_DICT).filter((n) =>
+          CATEGORY_CRITERIA_OPTIONS.relationship.includes(n),
+        );
+        if (!names.length) names = ["관계", "공정함", "마음 편함"];
+        state.prefs.criteria = names.join("|");
+        return `좋아, ${josa(names.join(", "), "을/를")} 중요하게 보는구나.`;
+      },
+    },
+    {
+      id: "feeling",
+      text: ({ prefs }) => `${josa(String(prefs.partner ?? "상대"), "이/가")} 더치페이 이야기를 했을 때 네 마음은 어땠어?`,
+      options: () => ["조금 서운했어", "괜찮았어", "오히려 편해"],
+      parse: (answer, state) => {
+        const t = normalize(answer);
+        if (/서운|섭섭|기분\s*(?:나|상)|속상|당황|정\s*없/.test(t)) {
+          state.prefs.feeling = "hurt";
+          return "그랬구나, 서운할 수 있어. 그 마음도 중요한 기준이야.";
+        }
+        if (/편해|편하|좋아|홀가분|깔끔|오히려/.test(t)) {
+          state.prefs.feeling = "relieved";
+          return "오히려 편하게 느꼈구나!";
+        }
+        state.prefs.feeling = "ok";
+        return "알겠어, 크게 신경 쓰이진 않았구나.";
+      },
+    },
+  ],
+  criteria: ({ prefs }) => {
+    const names = criteriaFromPrefs(prefs);
+    const list: LLMCriterionDraft[] = names.map((name, i) => ({ name, weight: weightByOrder(i, names.length) }));
+    if (prefs.otherAsksDutch === true && !names.includes("상대방 입장")) {
+      list.push({ name: "상대방 입장", weight: 2, description: `${prefs.partner ?? "상대"}가 더치페이를 원했어요` });
+    }
+    return list;
+  },
+  score: (choice, criterion, { prefs }) => splitBillScore(choice, criterion, prefs),
+  describe: (name) => {
+    const C = SPLIT_BILL_CHOICES;
+    const info: Record<string, LLMChoiceDraft> = {
+      [C.dutch]: { name, description: "매번 각자 먹은 만큼 나눠 낸다", pros: ["누구도 부담을 느끼지 않아요", "상대가 원한 방식이에요"], cons: ["조금 딱딱하게 느껴질 수 있어요"] },
+      [C.alternate]: { name, description: "한 번씩 돌아가며 계산한다", pros: ["서로 대접하는 따뜻한 느낌이 있어요", "매번 계산할 필요가 없어요"], cons: ["금액 차이가 크면 한쪽이 부담돼요", "상대가 원한 방식은 아니에요"] },
+      [C.hybrid]: { name, description: "가벼운 식사·카페는 번갈아, 금액이 큰 날은 나눠 낸다", pros: ["부담과 정 사이의 균형이 좋아요", "큰 지출에서 서운함이 덜 생겨요"], cons: ["기준을 미리 이야기해 둬야 해요"] },
+      [C.iPay]: { name, description: "이번엔 내가 계산한다", pros: ["마음을 표현할 수 있어요"], cons: ["지출이 커져요", "상대가 오히려 부담을 느낄 수 있어요"] },
+    };
+    return info[name] ?? { name, pros: [], cons: [] };
+  },
+  transition: () => "좋아, 네 마음과 상황이 충분히 보였어!\n방법들을 차근차근 비교해볼게! 🔮",
+};
+
 export const SCENARIOS: Record<ScenarioDefinition["key"], ScenarioDefinition> = {
   travel,
   food: food_,
   phone,
   buy,
+  splitBill,
   generic,
 };
 

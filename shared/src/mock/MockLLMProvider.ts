@@ -1,9 +1,13 @@
 import type { DecisionLLMInput, DecisionLLMResponse, LLMProvider } from "../types";
 import { detectHighRisk, josa } from "../utils";
 import {
+  SPLIT_BILL,
+  extractAlternativeVerbChoices,
   extractGenericChoices,
+  extractRequestChoices,
   extractSituation,
   extractYesNoChoices,
+  isOpenQuestion,
   isRecommendRequest,
   normalize,
   pickDecisionSentence,
@@ -17,6 +21,8 @@ import {
   SCENARIOS,
   TRAVEL_KB,
   extractBuyItem,
+  extractSplitBillFacts,
+  splitBillChoices,
   findKnown,
   type Prefs,
   type ScenarioDefinition,
@@ -108,14 +114,35 @@ function detectChoices(text: string, category: string | undefined): DetectedChoi
     return { scenario: SCENARIOS.buy, choices: [...BUY_CHOICES], prefs: { item: extractBuyItem(text) } };
   }
 
+  const yesNo = extractYesNoChoices(text);
+  const open = isOpenQuestion(text);
+  const listed = /,|\/|\bvs\b|아니면|또는|혹은|(?<=\S)(?:와|과|이랑|랑|하고)\s|\s중(?:에서?|에)?(?:\s|$)/i.test(pickDecisionSentence(text));
+
+  // 더치페이 · 계산 고민: 사연 속 사실을 뽑아 전용 시나리오로 처리
+  const bill = extractSplitBillFacts(text);
+  if (bill && (SPLIT_BILL.test(text) || open || yesNo) && !listed) {
+    const { partner, ...flags } = bill;
+    return {
+      scenario: SCENARIOS.splitBill,
+      choices: splitBillChoices(text, bill),
+      prefs: { ...storyPrefs(text), ...flags, partner },
+    };
+  }
+
   // "~하는 게 맞을까?", "~할까 말까" 같은 예/아니오 고민.
   // "A와 B 중", "A, B", "A 아니면 B" 처럼 선택지를 나열한 경우에는 나열된 선택지를 우선한다.
-  const yesNo = extractYesNoChoices(text);
-  const listed = /,|\/|\bvs\b|아니면|또는|혹은|(?<=\S)(?:와|과|이랑|랑|하고)\s|\s중(?:에서?|에)?(?:\s|$)/i.test(pickDecisionSentence(text));
   if (yesNo && !listed) return { scenario: SCENARIOS.generic, choices: yesNo, prefs: { ...storyPrefs(text), yesNo: true } };
 
   if (generic.length >= 2) return { scenario: SCENARIOS.generic, choices: generic, prefs: storyPrefs(text) };
   if (yesNo) return { scenario: SCENARIOS.generic, choices: yesNo, prefs: { ...storyPrefs(text), yesNo: true } };
+
+  // "A할지 B할지"
+  const alternatives = extractAlternativeVerbChoices(text);
+  if (alternatives) return { scenario: SCENARIOS.generic, choices: alternatives, prefs: { ...storyPrefs(text), yesNo: true } };
+
+  // 열린 질문 + 사연 속 요청("~해달라고 했어") → 요청을 들어줄지 말지
+  const requested = open ? extractRequestChoices(text) : undefined;
+  if (requested) return { scenario: SCENARIOS.generic, choices: requested, prefs: { ...storyPrefs(text), yesNo: true } };
 
   if (generic.length === 0 && category && RECOMMENDED_CHOICES[category] && isRecommendRequest(text)) {
     const scenario = category === "food" ? SCENARIOS.food : SCENARIOS.travel;

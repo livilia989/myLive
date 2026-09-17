@@ -134,10 +134,35 @@ describe("일반 시나리오 · 수정 · 재분석", () => {
     const reply = lastAssistant(s);
     expect(reply.content).toContain("첫날 저녁은 친구가 샀어");
     expect(reply.options?.map((o) => o.label)).toContain("관계");
-    s = await talk(["관계랑 공평한 게 중요해", "더치페이 하기", "더치페이 하기"], s);
-    expect(s.context.criteria.map((c) => c.name)).toEqual(["관계", "공정함"]);
+    s = await talk(["관계랑 공평한 게 중요해"], s);
+    expect(lastAssistant(s).content).toContain("마음은 어땠어");
+    s = await talk(["괜찮았어"], s);
+    expect(s.context.criteria.map((c) => c.name)).toEqual(["관계", "공정함", "상대방 입장"]);
     expect(s.stage).toBe("presenting_result");
     expect(recommendedName(s)).toBe("더치페이 하기");
+  });
+
+  it("긴 사연 + 열린 질문에서 사실을 뽑아 선택지를 제안한다 (더치페이 · 오마카세)", async () => {
+    let s = await talk([
+      "화~금 총4일간 친구와 놀기로했어. 화-목은 저녁식사+카페 정도 갈거고 금요일은 점심에 1인22000원 짜리 오마카세를 먹을 예정이야. 화요일은 친구가 산다고했고, 수요일은 내가 결제했어. 아마 결제금액은 비슷할거야. 그럼에도 친구는 나에게 더치페이를 해달라고했어. 어떻게 하는게 좋을까?",
+    ]);
+    expect(s.context.choices.map((c) => c.name)).toEqual(["더치페이 하기", "번갈아 사기", "큰 금액만 더치페이"]);
+    const reply = lastAssistant(s).content;
+    expect(reply).toContain("화~금 총4일간 친구와 놀기로했어");
+    expect(reply).toContain("결제금액은 비슷할거야");
+    expect(reply).toContain("서로 번갈아 계산했고, 금액도 비슷한 편이야");
+    expect(reply).toContain("더치페이를 원하고 있구나");
+    expect(reply).not.toContain("어떻게 하기");
+    s = await talk(["관계랑 마음 편한 게 중요해", "조금 서운했어"], s);
+    expect(s.stage).toBe("presenting_result");
+    expect(s.result?.choiceResults).toHaveLength(3);
+  });
+
+  it("문장 분리 · 요청형 · 'A할지 B할지' 표현을 이해한다", async () => {
+    let s = await talk(["동생이 나한테 내 노트북을 빌려달라고 했어. 근데 과제 때문에 나도 써야 해. 어떻게 하는 게 좋을까?"]);
+    expect(s.context.choices.map((c) => c.name)).toEqual(["노트북 빌려주기", "노트북 빌려주지 않기"]);
+    s = await talk(["이번 주말에 집에서 쉴지 친구 만날지 고민이야"]);
+    expect(s.context.choices).toHaveLength(2);
   });
 
   it("다양한 예/아니오 표현을 선택지로 바꾼다", async () => {
@@ -162,5 +187,13 @@ describe("일반 시나리오 · 수정 · 재분석", () => {
   it("고위험 주제는 안내 문구를 보여준다", async () => {
     const s = await talk(["주식이랑 적금 중 고민이야"]);
     expect(s.messages.some((m) => m.content.includes("전문가"))).toBe(true);
+  });
+});
+
+describe("자연어 파서", () => {
+  it("선택지 이름을 자연스럽게 만든다", async () => {
+    const { extractAlternativeVerbChoices, splitSentences } = await import("../src/mock/parsers");
+    expect(extractAlternativeVerbChoices("이번 주말에 집에서 쉴지 친구 만날지 고민이야")).toEqual(["집에서 쉬기", "친구 만나기"]);
+    expect(splitSentences("화~금 총4일간 놀아. 1.5만원이야! 어떻게 할까?")).toEqual(["화~금 총4일간 놀아", "1.5만원이야", "어떻게 할까"]);
   });
 });
