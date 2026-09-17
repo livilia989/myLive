@@ -124,6 +124,41 @@ describe("일반 시나리오 · 수정 · 재분석", () => {
     expect(recommendedName(r)).toBe("오사카");
   });
 
+  it("긴 사연형 예/아니오 고민을 이해한다 (더치페이)", async () => {
+    let s = await talk([
+      "친구와 4일간 놀기로 했는데 첫날 저녁은 친구가 샀어. 둘쨋날 저녁은 내가 결제했는데 더치페이를 하자는 이야기를 들었어. 그냥 내가 사는게 맞을까>",
+    ]);
+    expect(s.context.choices.map((c) => c.name)).toEqual(["내가 사기", "더치페이 하기"]);
+    expect(s.category).toBe("daily");
+    expect(s.stage).toBe("collecting_criteria");
+    const reply = lastAssistant(s);
+    expect(reply.content).toContain("첫날 저녁은 친구가 샀어");
+    expect(reply.options?.map((o) => o.label)).toContain("관계");
+    s = await talk(["관계랑 공평한 게 중요해", "더치페이 하기", "더치페이 하기"], s);
+    expect(s.context.criteria.map((c) => c.name)).toEqual(["관계", "공정함"]);
+    expect(s.stage).toBe("presenting_result");
+    expect(recommendedName(s)).toBe("더치페이 하기");
+  });
+
+  it("다양한 예/아니오 표현을 선택지로 바꾼다", async () => {
+    const cases: Array<[string, string[]]> = [
+      ["회사에서 야근을 부탁받았는데 오늘 약속이 있어. 거절해도 될까?", ["거절하기", "거절하지 않기"]],
+      ["헬스장 등록할까 말까", ["헬스장 등록하기", "헬스장 등록하지 않기"]],
+      ["친구한테 먼저 연락하는 게 좋을까?", ["친구한테 먼저 연락하기", "친구한테 먼저 연락하지 않기"]],
+    ];
+    for (const [text, expected] of cases) {
+      const s = await talk([text]);
+      expect(s.context.choices.map((c) => c.name)).toEqual(expected);
+    }
+  });
+
+  it("사연에서 선택지를 못 찾으면 상황을 정리하고 선택지를 묻는다", async () => {
+    const s = await talk(["요즘 회사 일이 너무 많아. 팀장님이 새 프로젝트를 맡으라고 하셨어. 어떻게 하지"]);
+    expect(s.stage).toBe("collecting_choices");
+    expect(s.context.choices).toHaveLength(0);
+    expect(lastAssistant(s).content).toContain("상황을 정리해보면");
+  });
+
   it("고위험 주제는 안내 문구를 보여준다", async () => {
     const s = await talk(["주식이랑 적금 중 고민이야"]);
     expect(s.messages.some((m) => m.content.includes("전문가"))).toBe(true);

@@ -612,13 +612,23 @@ export const CATEGORY_CRITERIA_OPTIONS: Record<string, string[]> = {
   money: ["필요성", "금액 부담", "만족도", "장기 가치"],
   daily: ["만족도", "비용", "시간", "편의성", "기분"],
   custom: ["만족도", "비용", "시간", "편의성", "기분"],
+  /** 친구 · 연인 · 가족 · 동료 등 사람 사이의 고민 */
+  relationship: ["관계", "공정함", "금전 부담", "마음 편함", "상대방 입장"],
 };
 
+export const RELATIONSHIP_PATTERN =
+  /친구|연인|애인|남친|여친|남자\s*친구|여자\s*친구|가족|부모|엄마|아빠|형|누나|언니|오빠|동생|동료|선배|후배|상사|팀장|지인|룸메/;
+
 const GENERIC_CRITERIA_DICT: Record<string, RegExp> = {
-  가격: /가격|비용|돈|저렴|싸|예산|금액/,
+  관계: /관계|사이|우정|서운|눈치|기분\s*상|멀어|사이가/,
+  공정함: /공정|공평|반반|형평|번갈아|차례|계산/,
+  "금전 부담": /부담|금전|돈|지출|용돈/,
+  "마음 편함": /마음\s*편|편하게|찝찝|신경\s*쓰|불편|스트레스/,
+  "상대방 입장": /상대|입장|배려|성의|존중/,
+  가격: /가격|비용|저렴|싸|예산|금액/,
   품질: /품질|퀄리티|질/,
   디자인: /디자인|예쁜|외관|이쁜/,
-  편의성: /편의|편한|편하|간편|접근성|거리|가까/,
+  편의성: /편의|간편|접근성|거리|가까/,
   시간: /시간|빠른|빨리|오래\s*걸/,
   맛: /맛/,
   건강: /건강|칼로리|다이어트/,
@@ -628,20 +638,33 @@ const GENERIC_CRITERIA_DICT: Record<string, RegExp> = {
   안정성: /안정|안전|오래\s*다닐|정규직/,
   분위기: /분위기|사람|동료|문화|환경/,
   만족도: /만족|행복|좋아하는|재미|즐거/,
-  기분: /기분|마음|느낌/,
+  기분: /기분|느낌/,
 };
+
+function situationBullets(prefs: Prefs): string {
+  const raw = prefs.situation;
+  if (typeof raw !== "string" || !raw) return "";
+  return `상황을 정리해보면 이렇구나:\n${raw
+    .split("|")
+    .map((line) => `• ${line}`)
+    .join("\n")}\n\n`;
+}
 
 const generic: ScenarioDefinition = {
   key: "generic",
   category: "custom",
   emoji: "✨",
   topic: ({ choices }) => choices.join(" vs "),
-  intro: ({ choices }) => `${choicePhrase(choices)} 사이에서 고민 중이구나! ✨\n둘 다 이유가 있어서 고민되는 거겠지?`,
+  intro: ({ choices, prefs }) =>
+    prefs.yesNo
+      ? `이야기해줘서 고마워. 🐾\n${situationBullets(prefs)}그러니까 '${choices[0]}'${josa(choices[0], "과/와").slice(choices[0].length)} '${choices[1]}' 중에서 고민 중인 거지?`
+      : `${situationBullets(prefs)}${choicePhrase(choices)} 사이에서 고민 중이구나! ✨\n둘 다 이유가 있어서 고민되는 거겠지?`,
   questions: ({ prefs, choices }) => {
     const criteriaQuestion: ScenarioQuestion = {
       id: "criteria",
       text: () => "비교할 때 어떤 기준이 제일 중요해? 중요한 순서대로 여러 개 말해줘도 좋아.",
-      options: (state) => CATEGORY_CRITERIA_OPTIONS[String(state.prefs.category ?? "custom")] ?? CATEGORY_CRITERIA_OPTIONS.custom,
+      options: (state) =>
+        CATEGORY_CRITERIA_OPTIONS[String(state.prefs.criteriaPreset ?? state.prefs.category ?? "custom")] ?? CATEGORY_CRITERIA_OPTIONS.custom,
       parse: (answer, state) => {
         let names = extractKeywords(answer, GENERIC_CRITERIA_DICT);
         if (!names.length) names = isUnknownAnswer(answer) ? ["만족도", "비용"] : extractFreeCriteria(answer);

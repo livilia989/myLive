@@ -1,11 +1,19 @@
 import type { DecisionLLMInput, DecisionLLMResponse, LLMProvider } from "../types";
 import { detectHighRisk, josa } from "../utils";
-import { extractGenericChoices, isRecommendRequest, normalize } from "./parsers";
+import {
+  extractGenericChoices,
+  extractSituation,
+  extractYesNoChoices,
+  isRecommendRequest,
+  normalize,
+  pickDecisionSentence,
+} from "./parsers";
 import {
   BUY_CHOICES,
   BUY_PATTERN,
   FOOD_KB,
   PHONE_KB,
+  RELATIONSHIP_PATTERN,
   SCENARIOS,
   TRAVEL_KB,
   extractBuyItem,
@@ -58,7 +66,18 @@ const RECOMMENDED_CHOICES: Record<string, string[]> = {
 };
 
 function detectCategory(text: string): string | undefined {
+  // 사람이 등장하는 긴 사연은 '저녁', '여행' 같은 단어보다 사람 사이의 일상 고민으로 본다
+  if (text.length > 40 && RELATIONSHIP_PATTERN.test(text)) return "daily";
   return CATEGORY_PATTERNS.find(([, pattern]) => pattern.test(text))?.[0];
+}
+
+/** 사연형 입력에서 상황 요약과 기준 프리셋(사람 사이 고민 등)을 뽑는다. */
+function storyPrefs(text: string): Prefs {
+  const prefs: Prefs = {};
+  const situation = extractSituation(text);
+  if (situation.length) prefs.situation = situation.join("|");
+  if (RELATIONSHIP_PATTERN.test(text)) prefs.criteriaPreset = "relationship";
+  return prefs;
 }
 
 interface DetectedChoices {
@@ -89,7 +108,14 @@ function detectChoices(text: string, category: string | undefined): DetectedChoi
     return { scenario: SCENARIOS.buy, choices: [...BUY_CHOICES], prefs: { item: extractBuyItem(text) } };
   }
 
-  if (generic.length >= 2) return { scenario: SCENARIOS.generic, choices: generic };
+  // "~하는 게 맞을까?", "~할까 말까" 같은 예/아니오 고민.
+  // "A와 B 중", "A, B", "A 아니면 B" 처럼 선택지를 나열한 경우에는 나열된 선택지를 우선한다.
+  const yesNo = extractYesNoChoices(text);
+  const listed = /,|\/|\bvs\b|아니면|또는|혹은|(?<=\S)(?:와|과|이랑|랑|하고)\s|\s중(?:에서?|에)?(?:\s|$)/i.test(pickDecisionSentence(text));
+  if (yesNo && !listed) return { scenario: SCENARIOS.generic, choices: yesNo, prefs: { ...storyPrefs(text), yesNo: true } };
+
+  if (generic.length >= 2) return { scenario: SCENARIOS.generic, choices: generic, prefs: storyPrefs(text) };
+  if (yesNo) return { scenario: SCENARIOS.generic, choices: yesNo, prefs: { ...storyPrefs(text), yesNo: true } };
 
   if (generic.length === 0 && category && RECOMMENDED_CHOICES[category] && isRecommendRequest(text)) {
     const scenario = category === "food" ? SCENARIOS.food : SCENARIOS.travel;
@@ -165,7 +191,9 @@ export class MockLLMProvider implements LLMProvider {
 
       if (!detected) {
         const single = extractGenericChoices(text);
-        if (single.length === 1 && !isRecommendRequest(text)) {
+        const situation = extractSituation(text);
+        // 짧은 한 문장에서 후보가 하나만 보일 때만 "다른 후보"를 묻는다 (긴 사연에서 단어를 잘못 집지 않도록)
+        if (single.length === 1 && situation.length === 0 && text.length <= 25 && !isRecommendRequest(text)) {
           prefs.pendingChoice = single[0];
           return {
             reply: `${josa(single[0], "을/를")} 생각하고 있구나! 🤔\n${single[0]} 말고 비교해볼 다른 후보도 있어?`,
@@ -176,8 +204,11 @@ export class MockLLMProvider implements LLMProvider {
           };
         }
         const ask = ASK_CHOICES[category ?? "default"] ?? ASK_CHOICES.default;
+        const summary = situation.length
+          ? `이야기해줘서 고마워. 🐾\n상황을 정리해보면 이렇구나:\n${situation.map((s) => `• ${s}`).join("\n")}\n\n그럼 어떤 선택지들 사이에서 고민 중인지 알려줄래? 예: 'A 하기, B 하기'`
+          : undefined;
         return {
-          reply: ask.text,
+          reply: summary ?? ask.text,
           category,
           userPreferences: prefs,
           nextQuestion: { id: "choices", text: ask.text, options: ask.options },
