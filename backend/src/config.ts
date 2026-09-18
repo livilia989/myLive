@@ -1,9 +1,12 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-// backend/.env 가 있으면 읽는다 (Node 내장 기능, 추가 패키지 없음)
-const envPath = fileURLToPath(new URL("../.env", import.meta.url));
-if (existsSync(envPath)) process.loadEnvFile(envPath);
+// backend/.env.local → backend/.env 순서로 읽는다 (Node 내장 기능, 추가 패키지 없음)
+// 먼저 읽은 값이 우선하므로 .env.local(비밀 값, git 제외)이 .env(공개 기본값)를 덮어쓴다.
+for (const file of ["../.env.local", "../.env"]) {
+  const envPath = fileURLToPath(new URL(file, import.meta.url));
+  if (existsSync(envPath)) process.loadEnvFile(envPath);
+}
 
 function bool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === "") return fallback;

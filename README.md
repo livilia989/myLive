@@ -67,7 +67,11 @@ npm run dev
 - 웹: http://localhost:5173
 - API: http://localhost:8787 (웹 개발 서버가 `/api` 요청을 자동으로 넘겨줍니다)
 
-`backend/.env`, `frontend/.env` 가 없어도 기본값(Mock LLM)으로 동작합니다. 설정을 바꾸려면 예시 파일을 복사하세요.
+`backend/.env`, `frontend/.env` 는 저장소에 포함되어 있어 바로 동작합니다.
+
+> ⚠️ 공개 저장소입니다. API 키 같은 비밀 값은 `.env` 가 아니라 **`backend/.env.local`** 에 넣으세요. (git 에 올라가지 않고 `.env` 보다 우선 적용됩니다)
+
+처음부터 다시 만들고 싶다면 예시 파일을 복사하세요.
 
 ```bash
 cp backend/.env.example backend/.env

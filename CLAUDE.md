@@ -49,8 +49,8 @@ npm.cmd run dev
 ```
 
 - 웹: http://localhost:5173 / API: http://localhost:8787 (Vite 가 `/api` 를 프록시)
-- `.env` 는 git 에 없다. 필요하면 `backend/.env.example` → `backend/.env`, `frontend/.env.example` → `frontend/.env` 로 복사.
-  없어도 기본값(Mock LLM)으로 동작한다.
+- `backend/.env`, `frontend/.env`, `.claude/launch.json` 은 git 에 포함되어 있어 clone 후 바로 동작한다.
+- ⚠️ 저장소가 **공개**이므로 API 키 등 비밀 값은 `.env` 가 아니라 `backend/.env.local` 에 넣는다 (git 제외, `.env` 보다 우선).
 - 상태별 코기 이미지는 `frontend/src/assets/corgi/` 에 커밋되어 있다. 시트를 바꾸면 `npm.cmd run corgi:crop -w frontend`.
 
 ## 5. 자주 쓰는 명령
@@ -84,7 +84,7 @@ npm.cmd run dev
 
 ## 7. 환경변수 요점
 
-- `backend/.env`
+- `backend/.env` (커밋됨, 비밀 값 금지) / `backend/.env.local` (커밋 안 됨, 비밀 값용, 우선 적용)
   - `API_PORT=8787` — **`PORT` 가 아니다.** 미리보기 도구가 `PORT=5173` 을 넣어서 충돌했던 적이 있어 이름을 바꿨다.
   - `USE_MOCK_LLM=true` (기본) / `false` 면 `LLM_BASE_URL` · `LLM_MODEL` · `LLM_API_KEY` 사용 (OpenAI 호환)
   - `LLM_USE_RULE_DRAFT=true` — Mock 의 규칙 기반 초안을 LLM 에 함께 전달
@@ -134,7 +134,7 @@ npm.cmd run dev
 4. 추천 구조 — **하이브리드**: 규칙 엔진이 선택지를 못 찾거나 확신이 낮을 때만 LLM 에게 묻고,
    LLM 실패 · 시간 초과 시 규칙 엔진으로 되돌아간다. (`decisionFlow.generateValidatedResponse` 에 재시도 · fallback 이 이미 있음)
 5. 무료 인터넷 AI 대안: Google Gemini API(AI Studio 무료 키, OpenAI 호환 주소 제공), Groq.
-   API 키는 사용자가 직접 발급해서 `backend/.env` 에만 넣도록 안내한다 (채팅에 붙여넣지 않게).
+   API 키는 사용자가 직접 발급해서 `backend/.env.local` 에만 넣도록 안내한다 (채팅에 붙여넣지 않게, 공개 저장소라 `.env` 금지).
 
 관련 코드: `backend/src/llm/OpenAICompatibleProvider.ts`, `promptBuilder.ts`, `createProvider.ts`
 

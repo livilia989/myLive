@@ -6,8 +6,12 @@ dist/
 build/
 coverage/
 
-# env (API 키 등 비밀 값은 절대 커밋하지 않는다)
+# env
+# backend/.env, frontend/.env 는 비밀 값이 없는 기본 설정이라 다른 PC 에서 바로 쓰도록 커밋한다.
+# ⚠️ 공개 저장소이므로 API 키 같은 비밀 값은 넣지 말고 .env.local 에 넣는다 (.env.local 은 커밋되지 않음).
 .env
+!backend/.env
+!frontend/.env
 .env.local
 .env.*.local
 
@@ -22,8 +26,9 @@ Thumbs.db
 .vscode/
 .idea/
 
-# 로컬 도구 설정
-.claude/
+# 로컬 도구 설정 (개발 서버 실행 설정 launch.json 만 공유)
+.claude/*
+!.claude/launch.json
 
 # 캐릭터 원본은 시트만 보관 (잘못 잘린 개별 이미지는 제외, 상태별 이미지는 frontend/src/assets/corgi 에 있음)
 corgi-assets/*
