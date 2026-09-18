@@ -1,7 +1,7 @@
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import type { AppConfig } from "./config";
-import { createProvider, type ProviderInfo } from "./llm/createProvider";
+import { createProviders, type ProviderInfo, type ProviderRegistry } from "./llm/createProvider";
 import { InMemoryDecisionRepository } from "./repositories/InMemoryDecisionRepository";
 import type { DecisionRepository } from "./repositories/DecisionRepository";
 import { createDecisionRouter } from "./routes/decisions";
@@ -11,13 +11,23 @@ import { logger, requestLogger } from "./utils/logger";
 
 export interface AppDependencies {
   repository?: DecisionRepository;
+  providers?: ProviderRegistry;
+  /** 테스트용: 두 엔진 모두 이 Provider 로 대체 */
   providerInfo?: ProviderInfo;
 }
 
 export function createApp(config: AppConfig, deps: AppDependencies = {}) {
   const repository = deps.repository ?? new InMemoryDecisionRepository();
-  const providerInfo = deps.providerInfo ?? createProvider(config);
-  const service = new DecisionService(repository, providerInfo.provider);
+  const registry: ProviderRegistry =
+    deps.providers ??
+    (deps.providerInfo
+      ? { defaultEngine: "mock", engines: { mock: deps.providerInfo, llm: deps.providerInfo } }
+      : createProviders(config));
+  const service = new DecisionService(
+    repository,
+    { mock: registry.engines.mock.provider, llm: registry.engines.llm.provider },
+    registry.defaultEngine,
+  );
 
   const app = express();
   app.disable("x-powered-by");
@@ -31,11 +41,19 @@ export function createApp(config: AppConfig, deps: AppDependencies = {}) {
   app.use(requestLogger);
 
   app.get("/api/health", async (_req, res) => {
+    const llm = registry.engines.llm;
+    const llmReachable = await llm.healthCheck();
+    const current = registry.engines[registry.defaultEngine];
     res.json({
       status: "ok",
-      provider: providerInfo.name,
-      model: providerInfo.model,
-      llmReachable: await providerInfo.healthCheck(),
+      defaultEngine: registry.defaultEngine,
+      provider: current.name,
+      model: current.model,
+      llmReachable: registry.defaultEngine === "mock" ? true : llmReachable,
+      engines: {
+        mock: { available: true },
+        llm: { available: llmReachable, model: llm.model },
+      },
     });
   });
 

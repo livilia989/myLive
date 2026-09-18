@@ -58,7 +58,7 @@ npm.cmd run dev
 | 명령 | 설명 |
 |---|---|
 | `npm.cmd run dev` | 백엔드 + 프론트 동시 실행 |
-| `npm.cmd test` | Vitest 전체 (현재 23개 통과) |
+| `npm.cmd test` | Vitest 전체 (현재 26개 통과) |
 | `npm.cmd run typecheck` | shared · backend · frontend 타입 검사 |
 | `npm.cmd run lint` | ESLint |
 | `npm.cmd run build` | 프론트 프로덕션 빌드 |
@@ -67,7 +67,22 @@ npm.cmd run dev
 **작업을 끝내기 전에 `test` · `typecheck` · `lint` · `build` 를 모두 통과시키고 커밋 · 푸시한다.**
 커밋 메시지는 한국어, 형식 예: `feat: …`, `fix: …`.
 
-## 6. 환경변수 요점
+## 6. 대화 엔진 고르기 (설정 화면)
+
+설정 → 대화 엔진에서 바로 고른다 (브라우저 `localStorage` 의 `decision_settings.engine`).
+
+| 선택 | 값 | 동작 |
+|---|---|---|
+| 서버 · 규칙 엔진 (기본) | `mock` | 서버의 규칙 엔진. 빠름 |
+| 서버 · Ollama AI | `llm` | 서버가 `LLM_BASE_URL`(기본 로컬 Ollama)로 요청. 이 PC 는 약 50초 걸림 |
+| 브라우저 Mock | `browser` | 서버 없이 브라우저 안에서 규칙 엔진 |
+
+- 프론트가 요청마다 `X-LLM-Engine: mock | llm` 헤더를 보내고, 백엔드(`createProviders`)가 두 엔진을 모두 준비해 두었다가 골라 쓴다.
+- 헤더가 없으면 `backend/.env` 의 `USE_MOCK_LLM` 이 기본값.
+- `/api/health` 의 `engines.llm.available` 로 Ollama 연결 여부를 설정 화면에 보여준다.
+- AI 가 형식이 틀린 답을 두 번 하면 규칙 엔진 답으로 대신한다. AI 가 엉뚱한 질문만 하면 원래 질문을 덧붙인다(`alreadyAsks`).
+
+## 7. 환경변수 요점
 
 - `backend/.env`
   - `API_PORT=8787` — **`PORT` 가 아니다.** 미리보기 도구가 `PORT=5173` 을 넣어서 충돌했던 적이 있어 이름을 바꿨다.
@@ -77,7 +92,7 @@ npm.cmd run dev
   - `VITE_USE_MOCK_LLM=true` 면 서버 없이 브라우저 안에서 Mock 으로 실행 (설정 화면에서도 전환 가능)
   - `VITE_` 값은 브라우저에 노출되므로 비밀 값 금지
 
-## 7. Mock LLM (규칙 기반 자연어 이해) — 현재 주력 엔진
+## 8. Mock LLM (규칙 기반 자연어 이해) — 현재 주력 엔진
 
 위치: `shared/src/mock/`
 
@@ -98,7 +113,7 @@ npm.cmd run dev
 - 지식 베이스에 없는 선택지는 기준별로 사용자에게 "어느 쪽이 나아?" 를 물어서 점수를 매김
 - 문맥(대명사, 이전 대화 내용) 추론은 거의 없음
 
-## 8. 실제 LLM — 그래픽카드 있는 환경에서 재시도 예정
+## 9. 실제 LLM — 그래픽카드 있는 환경에서 재시도 예정
 
 지금까지 확인한 사실:
 - 기존 PC(i5-1135G7, RAM 16GB, 내장 그래픽)에서 Ollama `qwen2.5:3b`:
@@ -108,14 +123,14 @@ npm.cmd run dev
 그래픽카드 PC 에서 할 일:
 1. Ollama 설치 후 한국어가 좋은 모델을 받아 비교한다. 후보: EXAONE 3.5 (7.8B), Qwen 2.5/3 (7B~14B), Gemma 3 (12B).
    (다운로드 전에 사용자에게 용량을 알리고 확인받는다.)
-2. `backend/.env` 설정:
+2. 설정 화면에서 **서버 · Ollama AI** 를 고른다. (서버 기본값까지 바꾸려면 `backend/.env`):
    ```
    USE_MOCK_LLM=false
    LLM_BASE_URL=http://localhost:11434/v1
    LLM_MODEL=<모델 이름>
    LLM_API_KEY=
    ```
-3. 사용자가 보낸 사연 문장들(아래 9번)로 속도와 선택지 품질을 확인한다.
+3. 사용자가 보낸 사연 문장들(아래 10번)로 속도와 선택지 품질을 확인한다.
 4. 추천 구조 — **하이브리드**: 규칙 엔진이 선택지를 못 찾거나 확신이 낮을 때만 LLM 에게 묻고,
    LLM 실패 · 시간 초과 시 규칙 엔진으로 되돌아간다. (`decisionFlow.generateValidatedResponse` 에 재시도 · fallback 이 이미 있음)
 5. 무료 인터넷 AI 대안: Google Gemini API(AI Studio 무료 키, OpenAI 호환 주소 제공), Groq.
@@ -123,7 +138,7 @@ npm.cmd run dev
 
 관련 코드: `backend/src/llm/OpenAICompatibleProvider.ts`, `promptBuilder.ts`, `createProvider.ts`
 
-## 9. 사용자가 실제로 테스트한 문장 (회귀 테스트로 유지)
+## 10. 사용자가 실제로 테스트한 문장 (회귀 테스트로 유지)
 
 - "후쿠오카와 오사카 중 어디로 여행 갈지 고민이야" → 기간 → 기준 → 후쿠오카 추천
 - "친구와 4일간 놀기로 했는데 첫날 저녁은 친구가 샀어. 둘쨋날 저녁은 내가 결제했는데 더치페이를 하자는 이야기를 들었어. 그냥 내가 사는게 맞을까>"
@@ -131,7 +146,7 @@ npm.cmd run dev
 - "화~금 총4일간 친구와 놀기로했어. 화-목은 저녁식사+카페 정도 갈거고 금요일은 점심에 1인22000원 짜리 오마카세를 먹을 예정이야. 화요일은 친구가 산다고했고, 수요일은 내가 결제했어. 아마 결제금액은 비슷할거야. 그럼에도 친구는 나에게 더치페이를 해달라고했어. 어떻게 하는게 좋을까?"
   → `더치페이 하기` / `번갈아 사기` / `큰 금액만 더치페이` (예전에 '화~금' 잘림, '어떻게 하기' 선택지 버그)
 
-## 10. 작업 시 주의사항 (과거에 겪은 문제)
+## 11. 작업 시 주의사항 (과거에 겪은 문제)
 
 - **한글 입력 Enter**: 한글 조합 중 Enter 는 `isComposing=true` 로 온다. `ChatInput.tsx` 에서 조합이 끝난 뒤 전송하도록 처리되어 있다. 건드릴 때 한 번 Enter 로 전송되는지 확인.
 - **Tailwind 3 색상 투명도**: CSS 변수 색은 `rgb(var(--x-rgb) / <alpha-value>)` 형식이어야 `bg-purple/40` 이 동작한다 (`globals.css` 의 `-rgb` 토큰).
@@ -141,7 +156,7 @@ npm.cmd run dev
 - `corgi-assets/` 의 개별 PNG 들은 잘못 잘린 이미지라 git 에서 제외했다 (시트만 커밋).
 - 줄바꿈은 `.gitattributes` 로 LF 고정.
 
-## 11. 폴더 지도 (자주 여는 파일)
+## 12. 폴더 지도 (자주 여는 파일)
 
 ```
 shared/src/decisionFlow.ts          대화 단계 · 검증 · 재시도 · fallback · 결과 메시지

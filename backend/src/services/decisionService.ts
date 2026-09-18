@@ -10,14 +10,21 @@ import {
   type DecisionSession,
   type LLMProvider,
 } from "@mylive/shared";
+import type { EngineName } from "../llm/createProvider";
 import type { DecisionRepository } from "../repositories/DecisionRepository";
 import { HttpError, badRequest, notFound } from "../utils/httpError";
 
 export class DecisionService {
   constructor(
     private readonly repository: DecisionRepository,
-    private readonly provider: LLMProvider,
+    private readonly providers: Record<EngineName, LLMProvider>,
+    private readonly defaultEngine: EngineName,
   ) {}
+
+  /** 화면에서 고른 엔진 (없으면 서버 기본값) */
+  private providerFor(engine?: EngineName): LLMProvider {
+    return this.providers[engine ?? this.defaultEngine];
+  }
 
   async create(input: { title?: string; category?: string }): Promise<DecisionSession> {
     return this.repository.save(createDecisionSession(input));
@@ -60,12 +67,13 @@ export class DecisionService {
   async sendMessage(
     id: string,
     input: { content: string; session?: DecisionSession; action?: "edit_choices" | "complete" },
+    engine?: EngineName,
   ): Promise<DecisionSession> {
     const base = await this.resolve(id, input.session);
     if (input.action === "edit_choices") return this.repository.save(startChoiceEdit(base));
     if (input.action === "complete") return this.repository.save(completeSession(base));
     if (!input.content.trim()) throw badRequest("메시지를 입력해 주세요.");
-    const updated = await this.withLLM(() => processUserMessage(base, input.content, this.provider));
+    const updated = await this.withLLM(() => processUserMessage(base, input.content, this.providerFor(engine)));
     return this.repository.save(updated);
   }
 
@@ -75,9 +83,9 @@ export class DecisionService {
     return this.repository.save(reanalyzeSession(base, input.weights));
   }
 
-  async retry(id: string, input: { session?: DecisionSession }): Promise<DecisionSession> {
+  async retry(id: string, input: { session?: DecisionSession }, engine?: EngineName): Promise<DecisionSession> {
     const base = await this.resolve(id, input.session);
-    const updated = await this.withLLM(() => respondToLastUserMessage(base, this.provider));
+    const updated = await this.withLLM(() => respondToLastUserMessage(base, this.providerFor(engine)));
     return this.repository.save(updated);
   }
 

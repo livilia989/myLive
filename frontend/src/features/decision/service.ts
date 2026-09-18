@@ -1,6 +1,6 @@
 import { createDecisionSession } from "@mylive/shared";
 import { useSettingsStore } from "@/features/settings/store";
-import { httpDecisionApi, type DecisionApi } from "./api";
+import { createHttpDecisionApi, type DecisionApi } from "./api";
 import { browserMockDecisionApi } from "./mockApi";
 import type { DecisionSession } from "./types";
 
@@ -9,7 +9,8 @@ import type { DecisionSession } from "./types";
  * Zustand store 는 이 서비스만 호출하고, 실제 API 구현(HTTP / 브라우저 Mock)은 알지 못한다.
  */
 function currentApi(): DecisionApi {
-  return useSettingsStore.getState().llmMode === "browser" ? browserMockDecisionApi : httpDecisionApi;
+  const engine = useSettingsStore.getState().engine;
+  return engine === "browser" ? browserMockDecisionApi : createHttpDecisionApi(engine);
 }
 
 export const decisionService = {

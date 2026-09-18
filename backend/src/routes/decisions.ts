@@ -7,6 +7,7 @@ import {
   RetryBodySchema,
   SendMessageBodySchema,
 } from "../schemas/decisionSchemas";
+import { parseEngine } from "../llm/createProvider";
 import type { DecisionService } from "../services/decisionService";
 import { badRequest } from "../utils/httpError";
 
@@ -14,6 +15,11 @@ function parseBody<T extends z.ZodTypeAny>(schema: T, req: Request): z.infer<T> 
   const parsed = schema.safeParse(req.body ?? {});
   if (!parsed.success) throw badRequest();
   return parsed.data;
+}
+
+/** 화면에서 고른 대화 엔진: X-LLM-Engine: mock | llm */
+function engineOf(req: Request) {
+  return parseEngine(req.header("x-llm-engine"));
 }
 
 export function createDecisionRouter(service: DecisionService): Router {
@@ -39,7 +45,7 @@ export function createDecisionRouter(service: DecisionService): Router {
 
   router.post("/:id/messages", async (req, res) => {
     const body = parseBody(SendMessageBodySchema, req);
-    res.json({ session: await service.sendMessage(req.params.id, body) });
+    res.json({ session: await service.sendMessage(req.params.id, body, engineOf(req)) });
   });
 
   router.post("/:id/analyze", async (req, res) => {
@@ -49,7 +55,7 @@ export function createDecisionRouter(service: DecisionService): Router {
 
   router.post("/:id/retry", async (req, res) => {
     const body = parseBody(RetryBodySchema, req);
-    res.json({ session: await service.retry(req.params.id, body) });
+    res.json({ session: await service.retry(req.params.id, body, engineOf(req)) });
   });
 
   router.post("/:id/feedback", async (req, res) => {

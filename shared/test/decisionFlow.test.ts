@@ -7,6 +7,7 @@ import {
   reanalyzeSession,
   startChoiceEdit,
   type DecisionSession,
+  type LLMProvider,
 } from "../src";
 
 const provider = new MockLLMProvider();
@@ -195,5 +196,26 @@ describe("자연어 파서", () => {
     const { extractAlternativeVerbChoices, splitSentences } = await import("../src/mock/parsers");
     expect(extractAlternativeVerbChoices("이번 주말에 집에서 쉴지 친구 만날지 고민이야")).toEqual(["집에서 쉬기", "친구 만나기"]);
     expect(splitSentences("화~금 총4일간 놀아. 1.5만원이야! 어떻게 할까?")).toEqual(["화~금 총4일간 놀아", "1.5만원이야", "어떻게 할까"]);
+  });
+});
+
+describe("실제 AI 응답 보정", () => {
+  const mock = new MockLLMProvider();
+  const withReply = (reply: string): LLMProvider => ({
+    name: "fake-llm",
+    async generateDecisionResponse(input) {
+      return { ...(await mock.generateDecisionResponse(input)), reply };
+    },
+  });
+  const story = "동생이 나한테 내 노트북을 빌려달라고 했어. 근데 과제 때문에 나도 써야 해. 어떻게 하는 게 좋을까?";
+
+  it("AI 가 엉뚱한 질문만 하면 원래 질문을 붙인다", async () => {
+    const s = await processUserMessage(createDecisionSession(), story, withReply("이런 상황, 고민이네요. 서로의 입장에서 생각해보면 어떨까?"));
+    expect(lastAssistant(s).content).toContain("비교할 때 어떤 기준이 제일 중요해");
+  });
+
+  it("AI 가 같은 질문을 이미 했으면 중복해서 붙이지 않는다", async () => {
+    const s = await processUserMessage(createDecisionSession(), story, withReply("그렇구나! 비교할 때 어떤 기준이 가장 중요해?"));
+    expect(lastAssistant(s).content).not.toContain("비교할 때 어떤 기준이 제일 중요해");
   });
 });

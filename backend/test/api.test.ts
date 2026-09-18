@@ -35,6 +35,42 @@ describe("REST API", () => {
     await request(app).get(`/api/decisions/${id}`).expect(404);
   });
 
+  it("X-LLM-Engine 헤더로 규칙 엔진 / 실제 AI 를 요청마다 고른다", async () => {
+    const mock = new MockLLMProvider();
+    let llmCalls = 0;
+    const llm: LLMProvider = {
+      name: "fake-llm",
+      generateDecisionResponse: async (input) => {
+        llmCalls += 1;
+        return mock.generateDecisionResponse(input);
+      },
+    };
+    const app = createApp(config, {
+      providers: {
+        defaultEngine: "mock",
+        engines: {
+          mock: { provider: mock, name: "mock", healthCheck: async () => true },
+          llm: { provider: llm, name: "fake-llm", model: "test-model", healthCheck: async () => true },
+        },
+      },
+    });
+    const created = await request(app).post("/api/decisions").send({}).expect(201);
+    const id = created.body.session.id;
+
+    await request(app).post(`/api/decisions/${id}/messages`).send({ content: "짜장면이랑 짬뽕 중 고민이야" }).expect(200);
+    expect(llmCalls).toBe(0);
+
+    await request(app)
+      .post(`/api/decisions/${id}/messages`)
+      .set("X-LLM-Engine", "llm")
+      .send({ content: "매운 거 좋아!" })
+      .expect(200);
+    expect(llmCalls).toBe(1);
+
+    const health = await request(app).get("/api/health").expect(200);
+    expect(health.body.engines.llm).toEqual({ available: true, model: "test-model" });
+  });
+
   it("잘못된 요청은 400 으로 응답한다", async () => {
     await request(mockApp()).post("/api/decisions/abc/messages").send({ content: 123 }).expect(400);
   });

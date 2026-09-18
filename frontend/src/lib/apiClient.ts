@@ -19,6 +19,7 @@ interface RequestOptions {
   method?: "GET" | "POST" | "DELETE";
   body?: unknown;
   timeoutMs?: number;
+  headers?: Record<string, string>;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -26,7 +27,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method: options.method ?? "GET",
-      headers: options.body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      headers: {
+        ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
+      },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: AbortSignal.timeout(options.timeoutMs ?? 200_000),
     });
@@ -51,7 +55,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 }
 
 export const apiClient = {
-  get: <T>(path: string) => apiRequest<T>(path),
-  post: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: "POST", body: body ?? {} }),
+  get: <T>(path: string, headers?: Record<string, string>) => apiRequest<T>(path, { headers }),
+  post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
+    apiRequest<T>(path, { method: "POST", body: body ?? {}, headers }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: "DELETE" }),
 };

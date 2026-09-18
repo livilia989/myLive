@@ -91,7 +91,8 @@ cp frontend/.env.example frontend/.env
 | `npm run check` | 타입 검사 + 린트 + 테스트 + 빌드 한 번에 |
 | `npm run corgi:crop -w frontend` | 캐릭터 시트를 상태별 이미지로 자르기 |
 
-> 서버 없이 체험하려면 앱의 **설정 → 대화 엔진 → 브라우저 Mock 모드**를 선택하거나 `VITE_USE_MOCK_LLM=true` 로 실행하세요.
+> 앱의 **설정 → 대화 엔진**에서 `서버 · 규칙 엔진`(기본) / `서버 · Ollama AI` / `브라우저 Mock` 중 하나를 바로 고를 수 있습니다.
+> Ollama AI 는 로컬에 Ollama 가 실행 중이어야 하며, 설정 화면에 연결 상태가 표시됩니다.
 
 ---
 

@@ -7,8 +7,7 @@ import Toast from "@/components/common/Toast";
 import { useToast } from "@/components/common/useToast";
 import { hasCustomCorgiImages } from "@/components/corgi/corgiAssets";
 import AppShell from "@/components/layout/AppShell";
-import type { HealthStatus } from "@/features/decision/api";
-import { decisionService } from "@/features/decision/service";
+import { createHttpDecisionApi, type HealthStatus } from "@/features/decision/api";
 import { useDecisionStore } from "@/features/decision/store";
 import { useSettingsStore, type Settings } from "@/features/settings/store";
 
@@ -24,22 +23,26 @@ const RadioOption = ({ value, title, description, ...rest }: { value: string; ti
 
 const SettingsPage = () => {
   // logic
-  const { llmMode, reduceMotion, update } = useSettingsStore();
+  const { engine, reduceMotion, update } = useSettingsStore();
   const clearAllSessions = useDecisionStore((s) => s.clearAllSessions);
   const toast = useToast();
   const [confirmClear, setConfirmClear] = useState(false);
   const [health, setHealth] = useState<HealthStatus | "error" | null>(null);
 
-  const { register, control } = useForm<Settings>({ defaultValues: { llmMode, reduceMotion } });
+  const { register, control } = useForm<Settings>({ defaultValues: { engine, reduceMotion } });
   const watched = useWatch({ control });
 
   useEffect(() => {
     // 라디오 선택이 바뀌면 바로 저장한다
-    if (watched.llmMode && watched.reduceMotion) update({ llmMode: watched.llmMode, reduceMotion: watched.reduceMotion });
-  }, [watched.llmMode, watched.reduceMotion, update]);
+    if (watched.engine && watched.reduceMotion) update({ engine: watched.engine, reduceMotion: watched.reduceMotion });
+  }, [watched.engine, watched.reduceMotion, update]);
 
+  // 어떤 엔진을 골랐든 서버 상태(규칙 엔진 · Ollama 연결 여부)는 항상 서버에 물어본다
   const fetchHealth = useCallback(
-    (): Promise<HealthStatus | "error"> => decisionService.health().catch(() => "error" as const),
+    (): Promise<HealthStatus | "error"> =>
+      createHttpDecisionApi("mock")
+        .health()
+        .catch(() => "error" as const),
     [],
   );
 
@@ -56,7 +59,10 @@ const SettingsPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [fetchHealth, llmMode]);
+  }, [fetchHealth, engine]);
+
+  const serverDown = health === "error";
+  const llm = health && health !== "error" ? health.engines?.llm : undefined;
 
   // view
   return (
@@ -66,44 +72,57 @@ const SettingsPage = () => {
       </header>
 
       <div className="flex flex-col gap-5 px-4 py-3">
-        {/* START: LLM 모드 */}
+        {/* START: 대화 엔진 */}
         <section aria-labelledby="llm-title" className="card px-5 py-5">
           <h2 id="llm-title" className="flex items-center gap-2 text-base font-bold text-ink">
             <Bot aria-hidden size={20} className="text-purple" /> 대화 엔진
           </h2>
+          <p className="mt-1 text-xs text-muted-strong">코기가 고민을 이해할 때 쓰는 방식을 골라줘. 바로 적용돼.</p>
           <fieldset className="mt-3 flex flex-col gap-2">
             <legend className="sr-only">대화 엔진 선택</legend>
             <RadioOption
-              {...register("llmMode")}
-              value="server"
-              title="서버 연결 (기본)"
-              description="backend 서버를 통해 대화해요. 서버 설정에 따라 Mock 또는 로컬 Ollama 같은 무료 LLM 을 사용해요."
+              {...register("engine")}
+              value="mock"
+              title="서버 · 규칙 엔진 (기본, 빠름)"
+              description="서버에서 규칙 기반으로 고민을 이해해요. 답이 바로 나와요."
             />
             <RadioOption
-              {...register("llmMode")}
+              {...register("engine")}
+              value="llm"
+              title={`서버 · Ollama AI${llm?.model ? ` (${llm.model})` : ""}`}
+              description="이 PC 에 설치된 무료 로컬 AI 가 답해요. 그래픽카드가 없으면 한 번 답하는 데 1분 정도 걸릴 수 있어요. AI 가 이상한 답을 하면 규칙 엔진이 대신 답해요."
+            />
+            <RadioOption
+              {...register("engine")}
               value="browser"
               title="브라우저 Mock 모드"
-              description="서버 없이 브라우저 안에서 Mock LLM 으로 전체 흐름을 체험해요."
+              description="서버 없이 브라우저 안에서 규칙 엔진으로 체험해요."
             />
           </fieldset>
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-cream px-4 py-3 text-sm" aria-live="polite">
-            <span className="text-ink">
-              {health === null && "연결 상태 확인 중…"}
-              {health === "error" && "⚠️ 서버에 연결할 수 없어요. backend 실행 여부를 확인하거나 브라우저 Mock 모드를 사용해 주세요."}
-              {health && health !== "error" && (
-                <>
-                  ✅ 연결됨 · <strong>{health.provider}</strong>
-                  {health.model ? ` (${health.model})` : ""}
-                  {!health.llmReachable && " · LLM 서버 응답 없음"}
-                </>
-              )}
-            </span>
+          <ul className="mt-3 space-y-1.5 rounded-2xl bg-cream px-4 py-3 text-sm text-ink" aria-live="polite">
+            {health === null && <li>연결 상태 확인 중…</li>}
+            {serverDown && <li>⚠️ 서버에 연결할 수 없어요. 서버를 켜거나 브라우저 Mock 모드를 사용해 주세요.</li>}
+            {health && !serverDown && (
+              <>
+                <li>✅ 서버 연결됨 · 규칙 엔진 사용 가능</li>
+                <li>
+                  {llm?.available
+                    ? `✅ Ollama AI 사용 가능${llm.model ? ` (${llm.model})` : ""}`
+                    : "⚠️ Ollama 가 꺼져 있거나 설치되지 않았어요. Ollama 를 실행한 뒤 '다시 확인'을 눌러줘."}
+                </li>
+              </>
+            )}
+          </ul>
+          {engine === "llm" && llm && !llm.available && (
+            <p className="mt-2 text-xs font-semibold text-red-700">지금은 Ollama 에 연결할 수 없어서 대화가 실패할 수 있어요.</p>
+          )}
+          <div className="mt-2 flex justify-end">
             <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />} onClick={() => void checkHealth()}>
               다시 확인
             </Button>
           </div>
         </section>
-        {/* END: LLM 모드 */}
+        {/* END: 대화 엔진 */}
 
         {/* START: 움직임 */}
         <section aria-labelledby="motion-title" className="card px-5 py-5">

@@ -21,26 +21,34 @@ export interface HealthStatus {
   provider: string;
   model?: string;
   llmReachable: boolean;
+  defaultEngine?: "mock" | "llm";
+  engines?: {
+    mock: { available: boolean };
+    llm: { available: boolean; model?: string };
+  };
 }
 
 type SessionResponse = { session: DecisionSession };
 
-export const httpDecisionApi: DecisionApi = {
+/** 서버 API. engine 은 X-LLM-Engine 헤더로 전달되어 서버가 규칙 엔진 / 실제 AI 중 하나를 쓴다. */
+export function createHttpDecisionApi(engine: "mock" | "llm"): DecisionApi {
+  const h = { "X-LLM-Engine": engine };
+  return {
   mode: "server",
   async createDecision(input) {
     return (await apiClient.post<SessionResponse>("/api/decisions", input)).session;
   },
   async sendMessage(session, content) {
-    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/messages`, { content, session })).session;
+    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/messages`, { content, session }, h)).session;
   },
   async performAction(session, action) {
-    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/messages`, { action, session })).session;
+    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/messages`, { action, session }, h)).session;
   },
   async analyze(session, weights) {
-    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/analyze`, { session, weights })).session;
+    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/analyze`, { session, weights }, h)).session;
   },
   async retry(session) {
-    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/retry`, { session })).session;
+    return (await apiClient.post<SessionResponse>(`/api/decisions/${session.id}/retry`, { session }, h)).session;
   },
   async deleteDecision(id) {
     await apiClient.delete(`/api/decisions/${id}`);
@@ -51,4 +59,5 @@ export const httpDecisionApi: DecisionApi = {
   async health() {
     return apiClient.get<HealthStatus>("/api/health");
   },
-};
+  };
+}

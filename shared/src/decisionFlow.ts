@@ -87,6 +87,22 @@ function countQuestions(session: DecisionSession): number {
   return session.messages.filter((m) => m.role === "assistant" && m.type === "question").length;
 }
 
+/** 답변 안에 질문과 같은 내용의 질문이 이미 있는지 (핵심 단어가 절반 이상 겹치는 물음 문장) */
+function alreadyAsks(reply: string, question: string): boolean {
+  if (reply.includes(question)) return true;
+  const words = (text: string) => new Set(text.replace(/[^가-힣a-z0-9\s]/gi, " ").split(/\s+/).filter((w) => w.length >= 2));
+  const target = words(question);
+  if (!target.size) return false;
+  return reply
+    .split(/(?<=[?？])/)
+    .filter((sentence) => /[?？]/.test(sentence))
+    .some((sentence) => {
+      const got = words(sentence);
+      const overlap = [...target].filter((w) => [...got].some((g) => g.startsWith(w.slice(0, 2)))).length;
+      return overlap / target.size >= 0.5;
+    });
+}
+
 function sameName(a: string, b: string): boolean {
   return a.replace(/\s+/g, "").toLowerCase() === b.replace(/\s+/g, "").toLowerCase();
 }
@@ -296,8 +312,8 @@ export async function respondToLastUserMessage(session: DecisionSession, provide
     const stage: DecisionStage =
       question.id === "criteria" ? "collecting_criteria" : question.id === "choices" ? "collecting_choices" : "asking_questions";
     newMessages.push(
-      // LLM 이 질문을 자기 말로 바꿔 이미 물어봤다면(물음표 포함) 질문을 중복해서 붙이지 않는다
-      assistant(reply.includes(question.text) || /[?？]/.test(reply) ? reply : `${reply}\n${question.text}`, stage, {
+      // LLM 이 같은 질문을 자기 말로 이미 했다면 중복해서 붙이지 않고, 엉뚱한 질문만 했다면 원래 질문을 붙인다
+      assistant(alreadyAsks(reply, question.text) ? reply : `${reply}\n\n${question.text}`, stage, {
         type: "question",
         options: toQuickReplies(question.options ?? undefined),
         metadata: { stage, questionId: question.id },

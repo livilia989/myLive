@@ -10,6 +10,7 @@ import EmptyState from "@/components/common/EmptyState";
 import DecisionProgress from "@/components/decision/DecisionProgress";
 import AppShell from "@/components/layout/AppShell";
 import { useDecisionStore } from "@/features/decision/store";
+import { useSettingsStore } from "@/features/settings/store";
 import type { QuickReplyOption } from "@/features/decision/types";
 import { ACTION_EDIT_CHOICES, ACTION_NEW_DECISION, ACTION_VIEW_RESULT, STAGE_INFO, stageStatus } from "@/features/decision/utils";
 
@@ -31,6 +32,8 @@ const DecisionChatPage = () => {
     editChoices,
     selectQuickReply,
   } = useDecisionStore();
+
+  const engine = useSettingsStore((s) => s.engine);
 
   useEffect(() => {
     loadSession(id);
@@ -92,7 +95,7 @@ const DecisionChatPage = () => {
         <ChatMessageList
           messages={messages}
           isTyping={isTyping}
-          typingLabel={status}
+          typingLabel={engine === "llm" ? `${status} (로컬 AI 라 1분 정도 걸릴 수 있어요)` : status}
           characterState={characterState}
           disabled={isLoading}
           selectedQuickReply={selectedQuickReply}
